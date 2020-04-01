@@ -28,14 +28,14 @@ typedef struct teenycss_filteritem {
 
 typedef struct teenycss_rule {
     int filters_count;
-    teenycss_filteritem *filters;
+    teenycss_filteritem **filters;
 
     teenycss_hashmap *attribute_values;
 } teenycss_rule;
 
 typedef struct teenycss_ruleset {
     int rules_count;
-    teenycss_rule *rules;
+    teenycss_rule **rules;
 } teenycss_ruleset;
 
 

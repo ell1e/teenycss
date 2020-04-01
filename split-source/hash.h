@@ -66,6 +66,12 @@ const char *teenycss_hash_STSMapGet(
     teenycss_hashmap *map, const char *key
 );
 int teenycss_hash_STSMapUnset(teenycss_hashmap *map, const char *key);
+int teenycss_hash_STSMapIterate(
+    teenycss_hashmap *map,
+    int (*cb)(teenycss_hashmap *map, const char *key,
+              const char *value, void *ud),
+    void *ud
+);
 
 typedef struct teenycss_hashset teenycss_hashset;
 teenycss_hashset *teenycss_hashset_New(int buckets);

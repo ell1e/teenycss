@@ -181,8 +181,8 @@ int teenycss_hash_BytesMapIterate(
                   uint64_t byteslen, uint64_t number, void *ud),
         void *ud
         ) {
-    if (!map)
-        return 1;
+    if (!map || map->type != TEENYCSSHASHTYPE_BYTES)
+        return 0;
     int i = 0;
     while (i < map->bucket_count) {
         teenycss_hashmap_bucket *bk = map->buckets[i];
@@ -245,7 +245,6 @@ int teenycss_hash_StringMapUnset(teenycss_hashmap *map, const char *s) {
         return 0;
     return _teenycss_hash_MapUnset(map, s, strlen(s));
 }
-
 
 int teenycss_hash_IntMapSet(
         teenycss_hashmap *map, int64_t key, uint64_t number
@@ -338,9 +337,13 @@ int teenycss_hash_STSMapSet(
     if (number == 0)
         return 0;
     teenycss_hash_STSMapUnset(map, key);
-    return _teenycss_hash_MapSet(
-        map, key, strlen(key), number
-    );
+    if (!_teenycss_hash_MapSet(
+            map, key, strlen(key), number
+            )) {
+        free((char*)number);
+        return 0;
+    }
+    return 1;
 }
 
 const char *teenycss_hash_STSMapGet(teenycss_hashmap *map, const char *key) {
@@ -364,6 +367,29 @@ int teenycss_hash_STSMapUnset(teenycss_hashmap *map, const char *key) {
         free((void*)(uintptr_t)number);
     }
     return _teenycss_hash_MapUnset(map, key, strlen(key));
+}
+
+int teenycss_hash_STSMapIterate(
+        teenycss_hashmap *map,
+        int (*cb)(teenycss_hashmap *map, const char *key,
+                  const char *value, void *ud),
+        void *ud
+        ) {
+    if (!map || map->type != TEENYCSSHASHTYPE_STRING)
+        return 0;
+    int i = 0;
+    while (i < map->bucket_count) {
+        teenycss_hashmap_bucket *bk = map->buckets[i];
+        while (bk) {
+            if (!cb(map, (const char*)bk->bytes,
+                    (const char*)(uintptr_t)bk->number, ud))
+                return 0;
+            prevbk = bk;
+            bk = bk->next;
+        }
+        i++;
+    }
+    return 1;
 }
 
 

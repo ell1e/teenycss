@@ -65,7 +65,8 @@ void teenycss_FreeRule(teenycss_rule *rule) {
         return;
     int i = 0;
     while (i < rule->filters_count) {
-        teenycss_FreeFilterItem(rule->filters[i]);
+        if (rule->filters[i])
+            teenycss_FreeFilterItem(rule->filters[i]);
         i++;
     }
     if (rule->attribute_values) {
@@ -73,6 +74,41 @@ void teenycss_FreeRule(teenycss_rule *rule) {
         teenycss_hash_FreeMap(rule->attribute_values);
     }
     free(rule);
+}
+
+int _teenycss_DuplicateRule_AttrIterCopy(
+        teenycss_hashmap *map, const char *key, const char *value,
+        void *ud) {
+    teenycss_hashmap *new_map = ud;
+    return teenycss_hash_STSMapSet(new_map, key, value);
+}
+
+teenycss_rule *teenycss_DuplicateRule(teenycss_rule *rule) {
+    if (!rule)
+        return NULL;
+    if (rule->filters_count > 0)
+        return NULL;  // FIXME: handle this.
+    teenycss_rule *copyrule = malloc(sizeof(*copyrule));
+    if (!copyrule)
+        return NULL;
+    memset(copyrule, 0, sizeof(*copyrule));
+    if (rule->attribute_values) {
+        copyrule->attribute_values = (
+            teenycss_hash_NewStringToStringMap(64)
+        );
+        if (!copyrule->attribute_values) {
+            teenycss_FreeRule(copyrule);
+            return NULL;
+        }
+        if (!teenycss_hash_STSMapIterate(
+                rule->attribute_values,
+                &_teenycss_DuplicateRule_AttrIterCopy,
+                copyrule->attribute_values)) {
+            teenycss_FreeRule(copyrule);
+            return NULL;
+        }
+    }
+    return copyrule;
 }
 
 teenycss_filteritem *teenycss_FilterItemParse(
@@ -214,7 +250,11 @@ int teenycss_ParseAdditional(
         if (contents[i] == '\0')
             break;
         if (contents[i] == ',') {
-            currentchain_full = 1;
+            if (chains_count <= 0 ||
+                    chains[chains_count - 1].filters_count > 0
+                    )
+                currentchain_full = 1;
+            i++;
             continue;
         }
         if (contents[i] != '{')
@@ -283,18 +323,89 @@ int teenycss_ParseAdditional(
         }
         itemlen = 0;
         itembuf[0] = '\0';
+        int j = 0;
+        while (j < chains_count) {
+            teenycss_rule **newrules = realloc(
+                ruleset->rules,
+                sizeof(*ruleset->rules) * (rules_count + 1)
+            );
+            if (!newrules) {
+                if (j > 0)
+                    current_rule = NULL;  // owned by ruleset
+                goto errororquit;
+            }
+            ruleset->rules = newrules;
+            if (j == 0) {
+                current_rule->filters = chains[j]->filters;
+                current_rule->filters_count = chains[j]->filters_count;
+                chains[j]->filters = NULL;
+                chains[j]->filters_count = 0;
+                ruleset->rules[rules_count] = current_rule;
+            } else {
+                teenycss_filteritem **oldfilters = current_rule->filters;
+                int oldfilterscount = current_rule->filters_count;
+                current_rule->filters = NULL;
+                current_rule->filters_count = 0;
+                teenycss_rule *dup_rule = teenycss_DuplicateRule(
+                    current_rule
+                );
+                current_rule->filters = oldfilters;
+                current_rule->filters_count = oldfilterscount;
+                if (!dup_rule) {
+                    current_rule = NULL;  // owned by ruleset
+                    goto errororquit;
+                }
+                dup_rule->filters = chains[j]->filters;
+                dup_rule->filters_count = chains[j]->filters_count;
+                chains[j]->filters = NULL;
+                chains[j]->filters_count = 0;
+                ruleset->rules[rules_count] = dup_rule;
+            }
+            j++;
+        }
+        current_rule = NULL;  // now owned by ruleset.
         if (contents == '}') {
             i++;
         }
         
     }
+    if (chains) {
+        int k = 0;
+        while (k < chains_count) {
+            int z = 0;
+            while (z < chains[k].filters_count) {
+                teenycss_FreeFilterItem(
+                    chains[k].filters[z]
+                );
+                z++;
+            }
+            if (chains[k].filters)
+                free(chains[k].filters);
+            k++;
+        }
+        free(chains);
+    }
+    if (current_rule) teenycss_FreeRule(current_rule);
     return 1;
 }
 
 char *teenycss_Dump(teenycss_ruleset *ruleset) {
-    
+    if (!ruleset)
+        return NULL;
+
+    return NULL;
 }
 
 void teenycss_Free(teenycss_ruleset *ruleset) {
+    if (!ruleset)
+        return;
+    int i = 0;
+    while (i < ruleset->rules) {
+        if (ruleset->rules[i])
+            teenycss_FreeRule(ruleset->rules[i]);
+        i++;
+    }
+    if (ruleset->rules)
+        free(ruleset->rules);
     free(ruleset);
 }
