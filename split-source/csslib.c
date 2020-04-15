@@ -32,11 +32,13 @@ typedef struct teenycss_singlefilterchain {
 } teenycss_singlefilterchain;
 
 static int _teenycss_FreeFilterItem_FreeValue(
-        teenycss_hashmap *map, uint64_t number,
+        teenycss_hashmap *map,
+        const char *keyvalue, uint64_t keylen,
+        uint64_t valuenumber,
         void *userdata
         ) {
-    teenycss_attributeselectorvalue *value = (
-        (void*)(uintptr_t)number
+    teenycss_attributeselector *value = (
+        (void*)(uintptr_t)valuenumber
     );
     if (value) {
         if (value->filtervalue)
@@ -50,13 +52,13 @@ void teenycss_FreeFilterItem(teenycss_filteritem *filteritem) {
         return;
     if (filteritem->tagname)
         free(filteritem->tagname);
-    if (filteritem->attribute_values) { 
+    if (filteritem->attribute_selectors) { 
         teenycss_hash_BytesMapIterate(
-            filteritem->attribute_values,
+            filteritem->attribute_selectors,
             &_teenycss_FreeFilterItem_FreeValue,
             NULL
         );
-        teenycss_hash_FreeMap(filteritem->attribute_values);
+        teenycss_hash_FreeMap(filteritem->attribute_selectors);
     }
 }
 
@@ -137,7 +139,7 @@ teenycss_filteritem *teenycss_FilterItemParse(
     if (itemlen > 0) {
         newfilter->tagname = strdup(itembuf);
         if (!newfilter->tagname) {
-            teenycss_FreeFilterItem(newfilter):
+            teenycss_FreeFilterItem(newfilter);
             return NULL;
         }
     }
@@ -227,19 +229,20 @@ int teenycss_ParseAdditional(
             teenycss_singlefilterchain *current = (
                 &chains[chains_count - 1]
             );
+            int filteritemlen = 0;
             teenycss_filteritem *newfilteritem = (
                 teenycss_FilterItemParse(itembuf, &filteritemlen)
             );
             if (!newfilteritem)
-                goto errororquit;
+                goto errorquit;
 
-            teenycss_filteritem *new_filters = realloc(
+            teenycss_filteritem **new_filters = realloc(
                 current->filters,
                 sizeof(current->filters) * (current->filters_count + 1)
             );
             if (!new_filters) {
-                free(newfilter);
-                goto errororquit;
+                teenycss_FreeFilterItem(newfilteritem);
+                goto errorquit;
             }
             current->filters = new_filters;
             current->filters[current->filters_count] = newfilteritem;
@@ -263,7 +266,7 @@ int teenycss_ParseAdditional(
         if (chains_count == 0) {
             // Just skip the next rule:
             while (contents[i] != '}' && contents[i] != '\0') {
-                teenycss_skipwhitespace(contents, &i)
+                teenycss_skipwhitespace(contents, &i);
                 i++;
             }
             continue;
@@ -272,14 +275,14 @@ int teenycss_ParseAdditional(
         if (!current_rule) {
             current_rule = malloc(sizeof(*current_rule));
             if (!current_rule)
-                goto errororquit;
+                goto errorquit;
             memset(current_rule, 0, sizeof(*current_rule));
         }
         while (contents[i] != '}' && contents[i] != '\0') {
             teenycss_skipwhitespace(contents, &i);
             itemlen = 0;
             itembuf[0] = '\0';
-            while (contents[i] != ':'' && contents[i] != ';' &&
+            while (contents[i] != ':' && contents[i] != ';' &&
                     contents[i] != '}' && contents[i] != '\0') {
                 if (itemlen + 1 < sizeof(itembuf)) {
                     itembuf[itemlen + 1] = '\0';
@@ -308,39 +311,39 @@ int teenycss_ParseAdditional(
             if (itemlen > 0 && item2len > 0) {
                 if (!current_rule->attribute_values) {
                     current_rule->attribute_values = (
-                        teenycss_hash_NewStringToStringMap(
-                            teenycss_hash_NewStringMap(64)
-                        ));
+                        teenycss_hash_NewStringToStringMap(64)
+                    );
                     if (!current_rule->attribute_values)
-                        goto errororquit;
+                        goto errorquit;
                 }
                 if (!teenycss_hash_STSMapSet(
                         current_rule->attribute_values,
                         itembuf, item2buf))
-                    goto errororquit;
+                    goto errorquit;
                 
             }
         }
         itemlen = 0;
         itembuf[0] = '\0';
+        teenycss_skipwhitespace(contents, &i);
         int j = 0;
         while (j < chains_count) {
             teenycss_rule **newrules = realloc(
                 ruleset->rules,
-                sizeof(*ruleset->rules) * (rules_count + 1)
+                sizeof(*ruleset->rules) * (ruleset->rules_count + 1)
             );
             if (!newrules) {
                 if (j > 0)
                     current_rule = NULL;  // owned by ruleset
-                goto errororquit;
+                goto errorquit;
             }
             ruleset->rules = newrules;
             if (j == 0) {
-                current_rule->filters = chains[j]->filters;
-                current_rule->filters_count = chains[j]->filters_count;
-                chains[j]->filters = NULL;
-                chains[j]->filters_count = 0;
-                ruleset->rules[rules_count] = current_rule;
+                current_rule->filters = chains[j].filters;
+                current_rule->filters_count = chains[j].filters_count;
+                chains[j].filters = NULL;
+                chains[j].filters_count = 0;
+                ruleset->rules[ruleset->rules_count] = current_rule;
             } else {
                 teenycss_filteritem **oldfilters = current_rule->filters;
                 int oldfilterscount = current_rule->filters_count;
@@ -353,18 +356,19 @@ int teenycss_ParseAdditional(
                 current_rule->filters_count = oldfilterscount;
                 if (!dup_rule) {
                     current_rule = NULL;  // owned by ruleset
-                    goto errororquit;
+                    goto errorquit;
                 }
-                dup_rule->filters = chains[j]->filters;
-                dup_rule->filters_count = chains[j]->filters_count;
-                chains[j]->filters = NULL;
-                chains[j]->filters_count = 0;
-                ruleset->rules[rules_count] = dup_rule;
+                dup_rule->filters = chains[j].filters;
+                dup_rule->filters_count = chains[j].filters_count;
+                chains[j].filters = NULL;
+                chains[j].filters_count = 0;
+                ruleset->rules[ruleset->rules_count] = dup_rule;
             }
+            ruleset->rules_count++;
             j++;
         }
         current_rule = NULL;  // now owned by ruleset.
-        if (contents == '}') {
+        if (contents[i] == '}') {
             i++;
         }
         
@@ -400,7 +404,7 @@ void teenycss_Free(teenycss_ruleset *ruleset) {
     if (!ruleset)
         return;
     int i = 0;
-    while (i < ruleset->rules) {
+    while (i < ruleset->rules_count) {
         if (ruleset->rules[i])
             teenycss_FreeRule(ruleset->rules[i]);
         i++;

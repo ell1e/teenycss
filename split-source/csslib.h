@@ -1,11 +1,13 @@
 #ifndef TEENYCSS_CSSLIB_H_
 #define TEENYCSS_CSSLIB_H_
 
-typedef struct teenycss_rules teenycss_ruleset;
+typedef struct teenycss_ruleset teenycss_ruleset;
 
 teenycss_ruleset *teenycss_Parse(const char *contents);
 
-int teenycss_ParseAdditional(const char *contents);
+int teenycss_ParseAdditional(
+    teenycss_ruleset *rules, const char *contents
+);
 
 
 typedef struct teenycss_hashmap teenycss_hashmap;
@@ -16,10 +18,10 @@ typedef struct teenycss_hashmap teenycss_hashmap;
 #define TEENYCSS_ATTRIBUTEFILTERTYPE_MATCHEND 3
 #define TEENYCSS_ATTRIBUTEFILTERTYPE_MATCHCONTAINS 4
 
-typedef struct teenycss_attributeselectorvalue {
+typedef struct teenycss_attributeselector {
     int filtertype;
     char *filtervalue;
-} teenycss_attributeselectorvalue;
+} teenycss_attributeselector;
 
 typedef struct teenycss_filteritem {
     char *tagname;
@@ -39,6 +41,6 @@ typedef struct teenycss_ruleset {
 } teenycss_ruleset;
 
 
-
+void teenycss_Free(teenycss_ruleset *ruleset);
 
 #endif  // TEENYCSS_CSSLIB_H_

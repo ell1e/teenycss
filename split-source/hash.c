@@ -14,19 +14,20 @@ static char global_teenycss_hashsecret[16];
 #define TEENYCSSHASHTYPE_NUMBER 2
 #define TEENYCSSHASHTYPE_STRINGTOSTRING 3
 
+typedef struct teenycss_hashmap_bucket teenycss_hashmap_bucket;
 
-struct teenycss_hashmap_bucket {
+typedef struct teenycss_hashmap_bucket {
     char *bytes; uint64_t byteslen;
     uint64_t number;
     teenycss_hashmap_bucket *next, *prev;
-};
+} teenycss_hashmap_bucket;
 
 
-struct teenycss_hashmap {
+typedef struct teenycss_hashmap {
     int type;
     int bucket_count;
     teenycss_hashmap_bucket **buckets;
-};
+} teenycss_hashmap;
 
 
 uint64_t teenycss_hash_StringHash(const char *s) {
@@ -58,7 +59,7 @@ teenycss_hashmap *teenycss_hash_NewStringMap(int buckets) {
 }
 
 teenycss_hashmap *teenycss_hash_NewStringToStringMap(int buckets) {
-    teenycss_hashmap *map = teenycss_hashNewBytesMap(buckets);
+    teenycss_hashmap *map = teenycss_hash_NewBytesMap(buckets);
     if (!map)
         return NULL;
     map->type = TEENYCSSHASHTYPE_STRINGTOSTRING;
@@ -175,6 +176,12 @@ int teenycss_hash_BytesMapSet(
     );
 }
 
+struct bytemapiterateentry {
+    char *bytes;
+    uint64_t byteslen;
+    uint64_t number;
+};
+
 int teenycss_hash_BytesMapIterate(
         teenycss_hashmap *map,
         int (*cb)(teenycss_hashmap *map, const char *bytes,
@@ -183,17 +190,64 @@ int teenycss_hash_BytesMapIterate(
         ) {
     if (!map || map->type != TEENYCSSHASHTYPE_BYTES)
         return 0;
+
+    struct bytemapiterateentry *entries = NULL;
+    int alloc_size = 0;
+    int found_entries = 0;
+
     int i = 0;
     while (i < map->bucket_count) {
         teenycss_hashmap_bucket *bk = map->buckets[i];
         while (bk) {
-            if (!cb(map, bk->bytes, bk->byteslen, bk->number, ud))
-                return 0;
-            prevbk = bk;
+            if (alloc_size <= found_entries) {
+                alloc_size *= 2;
+                if (alloc_size < found_entries + 8)
+                    alloc_size = found_entries + 8;
+                struct bytemapiterateentry *new_entries = realloc(
+                    entries, sizeof(*entries) * alloc_size
+                );
+                if (!new_entries) {
+                    allocfail: ;
+                    int k = 0;
+                    while (k < found_entries) {
+                        if (entries[k].bytes)
+                            free(entries[k].bytes);
+                        k++;
+                    }
+                    free(entries);
+                    return 0;
+                }
+                entries = new_entries;
+            }
+            memset(&entries[found_entries],
+                   0, sizeof(entries[found_entries]));
+            if (bk->byteslen > 0) {
+                entries[found_entries].bytes = malloc(bk->byteslen);
+                if (!entries[found_entries].bytes)
+                    goto allocfail;
+                memcpy(entries[found_entries].bytes,
+                       bk->bytes, bk->byteslen);
+                entries[found_entries].byteslen = bk->byteslen;
+            }
+            entries[found_entries].number = bk->number;
             bk = bk->next;
         }
         i++;
     }
+    i = 0;
+    while (i < found_entries) {
+        if (!cb(map, entries[i].bytes, entries[i].byteslen,
+                entries[i].number, ud))
+            break;
+        i++;
+    }
+    i = 0;
+    while (i < found_entries) {
+        if (entries[i].bytes)
+            free(entries[i].bytes);
+        i++;
+    }
+    free(entries);
     return 1;
 }
 
@@ -317,7 +371,7 @@ void teenycss_hash_FreeMap(teenycss_hashmap *map) {
 }
 
 __attribute__((constructor)) static void teenycss_hashSetHashSecrets() {
-    if (!secrandom_GetBytes(
+    if (!teenycss_secrandom_GetBytes(
             global_teenycss_hashsecret, sizeof(global_teenycss_hashsecret)
             )) {
         fprintf(stderr,
@@ -369,6 +423,10 @@ int teenycss_hash_STSMapUnset(teenycss_hashmap *map, const char *key) {
     return _teenycss_hash_MapUnset(map, key, strlen(key));
 }
 
+struct stsmapiterateentry {
+    char *key, *value;
+};
+
 int teenycss_hash_STSMapIterate(
         teenycss_hashmap *map,
         int (*cb)(teenycss_hashmap *map, const char *key,
@@ -377,20 +435,75 @@ int teenycss_hash_STSMapIterate(
         ) {
     if (!map || map->type != TEENYCSSHASHTYPE_STRING)
         return 0;
+
+    struct stsmapiterateentry *entries = NULL;
+    int alloc_size = 0;
+    int found_entries = 0;
+
     int i = 0;
     while (i < map->bucket_count) {
         teenycss_hashmap_bucket *bk = map->buckets[i];
         while (bk) {
-            if (!cb(map, (const char*)bk->bytes,
-                    (const char*)(uintptr_t)bk->number, ud))
-                return 0;
-            prevbk = bk;
+            if (alloc_size <= found_entries) {
+                alloc_size *= 2;
+                if (alloc_size < found_entries + 8)
+                    alloc_size = found_entries + 8;
+                struct stsmapiterateentry *new_entries = realloc(
+                    entries, sizeof(*entries) * alloc_size
+                );
+                if (!new_entries) {
+                    allocfail: ;
+                    int k = 0;
+                    while (k < found_entries) {
+                        if (entries[k].key)
+                            free(entries[k].key);
+                        if (entries[k].value)
+                            free(entries[k].value);
+                        k++;
+                    }
+                    free(entries);
+                    return 0;
+                }
+                entries = new_entries;
+            }
+            memset(&entries[found_entries],
+                   0, sizeof(entries[found_entries]));
+            if (bk->bytes != NULL) {
+                entries[found_entries].key = strdup(
+                    (const char*)bk->bytes
+                );
+                if (!entries[found_entries].key)
+                    goto allocfail;
+            }
+            if (bk->number != 0) {
+                entries[found_entries].value = strdup(
+                    (const char*)(uintptr_t)bk->number
+                ); 
+                if (!entries[found_entries].value)
+                    goto allocfail;
+            }
             bk = bk->next;
         }
         i++;
     }
+    i = 0;
+    while (i < found_entries) {
+        if (!cb(map, entries[i].key, entries[i].value, ud))
+            break;
+        i++;
+    }
+    i = 0;
+    while (i < found_entries) {
+        if (entries[i].key)
+            free(entries[i].key);
+        if (entries[i].value)
+            free(entries[i].value);
+        i++;
+    }
+    free(entries);
     return 1;
 }
+
 
 
 typedef struct teenycss_hashset {

@@ -32,7 +32,8 @@ int teenycss_hash_BytesMapUnset(
 int teenycss_hash_BytesMapIterate(
     teenycss_hashmap *map,
     int (*callback)(
-        teenycss_hashmap *map, uint64_t number,
+        teenycss_hashmap *map, const char *bytes,
+        uint64_t byteslen, uint64_t number,
         void *userdata
     ),
     void *userdata
