@@ -20,13 +20,16 @@ typedef struct teenycss_hashmap teenycss_hashmap;
 
 typedef struct teenycss_attributeselector {
     int filtertype;
-    char *filtervalue;
+    char *value;
+    char *name;
 } teenycss_attributeselector;
 
 typedef struct teenycss_filteritem {
     char *tagname;
-    teenycss_hashmap *attribute_selectors;
+    int attribute_selectors_count;
+    teenycss_attributeselector *attribute_selectors;
 } teenycss_filteritem;
+
 
 typedef struct teenycss_rule {
     int filters_count;

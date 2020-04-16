@@ -31,21 +31,6 @@ typedef struct teenycss_singlefilterchain {
     teenycss_filteritem **filters;
 } teenycss_singlefilterchain;
 
-static int _teenycss_FreeFilterItem_FreeValue(
-        teenycss_hashmap *map,
-        const char *keyvalue, uint64_t keylen,
-        uint64_t valuenumber,
-        void *userdata
-        ) {
-    teenycss_attributeselector *value = (
-        (void*)(uintptr_t)valuenumber
-    );
-    if (value) {
-        if (value->filtervalue)
-            free(value->filtervalue);
-        free(value);
-    }
-}
 
 void teenycss_FreeFilterItem(teenycss_filteritem *filteritem) {
     if (!filteritem)
@@ -53,12 +38,15 @@ void teenycss_FreeFilterItem(teenycss_filteritem *filteritem) {
     if (filteritem->tagname)
         free(filteritem->tagname);
     if (filteritem->attribute_selectors) { 
-        teenycss_hash_BytesMapIterate(
-            filteritem->attribute_selectors,
-            &_teenycss_FreeFilterItem_FreeValue,
-            NULL
-        );
-        teenycss_hash_FreeMap(filteritem->attribute_selectors);
+        int i = 0;
+        while (i < filteritem->attribute_selectors_count) {
+            if (filteritem->attribute_selectors[i].value)
+                free(filteritem->attribute_selectors[i].value);
+            if (filteritem->attribute_selectors[i].name)
+                free(filteritem->attribute_selectors[i].name);
+            i++;
+        }
+        free(filteritem->attribute_selectors);
     }
 }
 
@@ -125,6 +113,8 @@ teenycss_filteritem *teenycss_FilterItemParse(
     if (!newfilter)
         return NULL;
     memset(newfilter, 0, sizeof(*newfilter));
+    newfilter->attribute_selectors = NULL;
+    newfilter->attribute_selectors_count = 0;
 
     char itembuf[2048];
     int itemlen = 0;
