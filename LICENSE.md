@@ -1,7 +1,7 @@
 
 # Project License
 
-## `teenycss` License
+## TeenyCSS License
 
 ```
 teenycss, a header-only compatible tiny CSS lib
@@ -27,7 +27,7 @@ freely, subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 ```
 
-## `siphash` License
+## SipHash License
 
 teenycss contains siphash (found in `vendor/siphash.c`):
 

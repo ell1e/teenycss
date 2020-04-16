@@ -35,9 +35,9 @@ This library is **not** preferrable if:
 
 ## Usage
 
-### Include in Project:
+### Include in Your Project
 
-If you get the latest release, just get the `teenycss.h` header file
+If you use the latest release, just grab the `teenycss.h` header file
 and include it:
 
 ```c
@@ -47,6 +47,9 @@ and include it:
 (the `#define` controls which ones of your object files contains the
 actual function code. If you include it only in one of your files,
 just always put the define.)
+
+For a development version directly from git, build the `teenycss.h`
+file from the separate source files using `make`.
 
 
 ### Usage Example
