@@ -433,7 +433,7 @@ int teenycss_hash_STSMapIterate(
                   const char *value, void *ud),
         void *ud
         ) {
-    if (!map || map->type != TEENYCSSHASHTYPE_STRING)
+    if (!map || map->type != TEENYCSSHASHTYPE_STRINGTOSTRING)
         return 0;
 
     struct stsmapiterateentry *entries = NULL;

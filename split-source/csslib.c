@@ -35,8 +35,6 @@ typedef struct teenycss_singlefilterchain {
 void teenycss_FreeFilterItem(teenycss_filteritem *filteritem) {
     if (!filteritem)
         return;
-    if (filteritem->tagname)
-        free(filteritem->tagname);
     if (filteritem->attribute_selectors) { 
         int i = 0;
         while (i < filteritem->attribute_selectors_count) {
@@ -116,41 +114,100 @@ teenycss_filteritem *teenycss_FilterItemParse(
     newfilter->attribute_selectors = NULL;
     newfilter->attribute_selectors_count = 0;
 
-    char itembuf[2048];
     int itemlen = 0;
-    while (contents[i] != '.' && contents[i] != '[' &&
-            contents[i] != '#' && contents[i] != '\0') {
-        if (itemlen + 1 < sizeof(itembuf)) {
-            itembuf[itemlen + 1] = '\0';
-            itembuf[itemlen] = contents[i];
-        }
-    }
+    char itembuf[2048] = "";
+
     teenycss_skipwhitespace(contents, &i);
-    if (itemlen > 0) {
-        newfilter->tagname = strdup(itembuf);
-        if (!newfilter->tagname) {
+    while (contents[i] != '\0') {
+        int orig_i = i;
+        int nameset = 0;
+        int filtertype = TEENYCSS_ATTRIBUTEFILTERTYPE_MATCHFULL;
+        char *name = NULL;
+        if (contents[i] == '.') {
+            nameset = 1;
+            name = strdup("class");
+            i++;
+        } else if (contents[i] == '#') {
+            nameset = 1;
+            name = strdup("id");
+            i++;
+        } else if (contents[i] != ':' && contents[i] != '[') {
+            nameset = 1;
+            name = strdup("tag");
+        }
+        if (!name && nameset) {
             teenycss_FreeFilterItem(newfilter);
             return NULL;
         }
-    }
-    while (contents[i] != '\0') {
-        if (contents[i] == '.' || contents[i] == '#') {
-            char typechar = contents[i];
-            itemlen = 0;
-            while (contents[i] != '.' && contents[i] != '[' &&
-                    contents[i] != '#' && contents[i] != '\0') {
-                if (itemlen + 1 < sizeof(itembuf)) {
-                    itembuf[itemlen + 1] = '\0';
-                    itembuf[itemlen] = contents[i];
+        itemlen = 0;
+        while (contents[i] != '.' && contents[i] != '[' &&
+                contents[i] != '#' && contents[i] != '\0' &&
+                contents[i] != ':') {
+            if (itemlen + 1 < sizeof(itembuf)) {
+                itembuf[itemlen + 1] = '\0';
+                itembuf[itemlen] = contents[i];
+            }
+            i++;
+        }
+        while (itemlen > 0 && (
+                itembuf[itemlen - 1] == ' ' ||
+                itembuf[itemlen - 1] == '\t' ||
+                itembuf[itemlen - 1] == '\r' ||
+                itembuf[itemlen - 1] == '\n')) {
+            itemlen--;
+            itembuf[itemlen] = '\0';
+        }
+        if (!name && itemlen == 1 && strcmp(itembuf, "*") == 0) {
+            name = strdup("tag");
+            if (!name) {
+                teenycss_FreeFilterItem(newfilter);
+                return NULL;
+            }
+            filtertype = TEENYCSS_ATTRIBUTEFILTERTYPE_ANY;
+        }
+        if (name && itemlen > 0) {
+            teenycss_attributeselector *new_selectors = realloc(
+                newfilter->attribute_selectors,
+                sizeof(*newfilter->attribute_selectors) *
+                (newfilter->attribute_selectors_count + 1)
+            );
+            if (!new_selectors) {
+                teenycss_FreeFilterItem(newfilter);
+                return NULL;
+            }
+            newfilter->attribute_selectors = new_selectors;
+            memset(
+                &newfilter->attribute_selectors[
+                    newfilter->attribute_selectors_count
+                ], 0, sizeof(*newfilter->attribute_selectors)
+            );
+            newfilter->attribute_selectors_count++;
+            newfilter->attribute_selectors[
+                newfilter->attribute_selectors_count
+            ].name = strdup(name);
+            if (!newfilter->attribute_selectors[
+                    newfilter->attribute_selectors_count
+                    ].name) {
+                teenycss_FreeFilterItem(newfilter);
+                return NULL;
+            }
+            if (filtertype != TEENYCSS_ATTRIBUTEFILTERTYPE_ANY) {
+                newfilter->attribute_selectors[
+                    newfilter->attribute_selectors_count
+                ].value = strdup(itembuf);
+                if (!newfilter->attribute_selectors[
+                        newfilter->attribute_selectors_count
+                        ].value) {
+                    teenycss_FreeFilterItem(newfilter);
+                    return NULL;
                 }
             }
-            if (typechar == '.') {
-
-            } else if (typechar == '#') {
-
-            }
-        } else {
-            break;
+            newfilter->attribute_selectors[
+                newfilter->attribute_selectors_count
+            ].filtertype = filtertype;
+        } else if (orig_i == i && contents[i] != '\0') {
+            i++;
+            teenycss_skipwhitespace(contents, &i);
         }
     }
     if (len)
@@ -167,7 +224,7 @@ int teenycss_ParseAdditional(
     char itembuf[2048] = "";
     int itemlen = 0;
     int chains_count = 0;
-    teenycss_singlefilterchain *chains;
+    teenycss_singlefilterchain *chains = NULL;
     int currentchain_full = 0;
     teenycss_rule *current_rule = NULL;
 
@@ -240,6 +297,7 @@ int teenycss_ParseAdditional(
         }
         itemlen = 0;
         itembuf[0] = '\0';
+        teenycss_skipwhitespace(contents, &i);
         if (contents[i] == '\0')
             break;
         if (contents[i] == ',') {
@@ -253,6 +311,7 @@ int teenycss_ParseAdditional(
         if (contents[i] != '{')
             continue;
         assert(contents[i] == '{');
+        i++;  // skip '{'
         if (chains_count == 0) {
             // Just skip the next rule:
             while (contents[i] != '}' && contents[i] != '\0') {
@@ -261,7 +320,7 @@ int teenycss_ParseAdditional(
             }
             continue;
         }
-        // Now parse the current rule entry:
+        // Now parse the current rule entry's rules:
         if (!current_rule) {
             current_rule = malloc(sizeof(*current_rule));
             if (!current_rule)
@@ -281,11 +340,13 @@ int teenycss_ParseAdditional(
                 }
                 i++;
             }
+            teenycss_skipwhitespace(contents, &i);
             if (contents[i] == ';') {
                 i++;
                 continue;
             }
             if (contents[i] != ':') break;
+            i++;  // skip ':'
             char item2buf[2048] = "";
             int item2len = 0;
             teenycss_skipwhitespace(contents, &i);

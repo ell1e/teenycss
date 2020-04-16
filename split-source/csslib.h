@@ -12,7 +12,7 @@ int teenycss_ParseAdditional(
 
 typedef struct teenycss_hashmap teenycss_hashmap;
 
-#define TEENYCSS_ATTRIBUTEFILTERTYPE_EXISTS 0
+#define TEENYCSS_ATTRIBUTEFILTERTYPE_ANY 0
 #define TEENYCSS_ATTRIBUTEFILTERTYPE_MATCHFULL 1
 #define TEENYCSS_ATTRIBUTEFILTERTYPE_MATCHBEGIN 2
 #define TEENYCSS_ATTRIBUTEFILTERTYPE_MATCHEND 3
@@ -25,7 +25,6 @@ typedef struct teenycss_attributeselector {
 } teenycss_attributeselector;
 
 typedef struct teenycss_filteritem {
-    char *tagname;
     int attribute_selectors_count;
     teenycss_attributeselector *attribute_selectors;
 } teenycss_filteritem;
