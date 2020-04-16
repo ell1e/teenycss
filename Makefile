@@ -17,8 +17,8 @@ assemble:
 	rm -f .begin .begin_impl .end .end_impl
 clean:
 	rm -f teeny_css.h $(TEST_BINS)
-test: assemble $(TEST_BINS)
+test: assemble clean $(TEST_BINS)
 	for x in $(TEST_BINS); do echo "TEST: $$x"; ./$$x || { exit 1; }; done
 	@echo "All tests were run."
 test_%.bin: test_%.c
-	$(CC) $(CFLAGS) -I. -pthread -o ./$(basename $@).bin $(basename $<).c -lcheck -lrt -lsubunit $(LDFLAGS)
+	$(CC) $(CFLAGS) -g -I. -pthread -o ./$(basename $@).bin $(basename $<).c -lcheck -lrt -lsubunit $(LDFLAGS)
