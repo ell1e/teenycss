@@ -444,11 +444,151 @@ int teenycss_ParseAdditional(
     return 1;
 }
 
+char *teenycss_DumpFilterItemSelector(
+        teenycss_attributeselector *fselector
+        ) {
+    if (!fselector)
+        return NULL;
+
+    if (fselector->filtertype == TEENYCSS_ATTRIBUTEFILTERTYPE_ANY) {
+        if (strcmp(fselector->name, "tag") == 0)
+            return strdup("*");
+        char *fstr = malloc(
+            strlen("[") + strlen(fselector->name) + strlen("=*") +
+            strlen("]")
+        );
+        if (!fstr)
+            return NULL;
+        sprintf(fstr, "[%s=*]", fselector->name);
+        return fstr;
+    }
+
+    if (strcmp(fselector->name, "tag") == 0)
+        return strdup(fselector->value);
+    char *fstr = malloc(
+        strlen("[") + strlen(fselector->name) + strlen("=\"") +
+        strlen(fselector->value) + strlen("\"]")
+    );
+    if (!fstr)
+        return NULL;
+    sprintf(fstr, "[%s=\"%s\"]", fselector->name, fselector->value);
+    return fstr;
+}
+
+char *teenycss_DumpFilterItem(teenycss_filteritem *fitem) {
+    if (!fitem)
+        return NULL;
+
+    char *result = strdup("");
+    if (!result)
+        return NULL;
+
+    int i = 0;
+    while (i < fitem->attribute_selectors_count) {
+        char *fitemtext = teenycss_DumpFilterItemSelector(
+            &fitem->attribute_selectors[i]
+        );
+        if (!fitemtext) {
+            free(result);
+            return NULL;
+        }
+        char *newresult = realloc(
+            result, strlen(result) + strlen(fitemtext) + 1
+        );
+        memcpy(result + strlen(result), fitemtext, strlen(fitemtext) + 1);
+        free(fitemtext);
+        i++;
+    }
+    return result;
+}
+
+char *teenycss_DumpRule(teenycss_rule *rule) {
+    if (!rule)
+        return NULL;
+
+    char *result = malloc(2);
+    if (!result)
+        return NULL;
+    result[0] = '\0';
+
+    int k = 0;
+    while (k < rule->filters_count) {
+        char *fstr = teenycss_DumpFilterItem(rule->filters[k]);
+        if (!fstr) {
+            free(result);
+            return NULL;
+        }
+        char *newresult = realloc(
+            result,
+            strlen(result) + 1 +
+            strlen(fstr) + 1 + 1
+        );
+        if (!newresult) {
+            free(fstr);
+            free(result);
+            return NULL;
+        }
+        result = newresult;
+        result[strlen(result) + 1] = '\0';
+        result[strlen(result)] = ' ';
+        memcpy(result + strlen(result),
+               fstr, strlen(fstr) + 1);
+        free(fstr);
+        k++;
+    }
+    result[strlen(result) + 1] = '\0';
+    result[strlen(result)] = '{';
+
+    {
+        char *newresult = realloc(
+            result, strlen(result) + 2
+        );
+        if (!newresult) {
+            free(result);
+            return NULL;
+        }
+        result = newresult;
+        result[strlen(result) + 1] = '\0';
+        result[strlen(result)] = '}';
+    }
+
+    return result;
+}
+
 char *teenycss_Dump(teenycss_ruleset *ruleset) {
     if (!ruleset)
         return NULL;
 
-    return NULL;
+    char *result = strdup("");
+    if (!result)
+        return NULL;
+
+    int i = 0;
+    while (i < ruleset->rules_count) {
+        char *ruletext = teenycss_DumpRule(ruleset->rules[i]);
+        if (!ruletext) {
+            free(result);
+            return NULL;
+        }
+        char *newresult = realloc(
+            result, strlen(result) + 1 + strlen(ruletext) + 1
+        );
+        if (!newresult) {
+            free(ruletext);
+            free(result);
+            return NULL;
+        }
+        result = newresult;
+        if (i == 0) {
+            result[strlen(result) + 1] = '\0';
+            result[strlen(result)] = '\n';
+        }
+        memcpy(result + strlen(result), ruletext, strlen(ruletext) + 1);
+        free(ruletext);
+        i++;
+    }
+
+    return result;
 }
 
 void teenycss_Free(teenycss_ruleset *ruleset) {

@@ -11,6 +11,10 @@ START_TEST(basic)
     );
     ck_assert(ruleset != NULL);
     ck_assert(ruleset->rules_count == 2);
+
+    char *s = teenycss_Dump(ruleset);
+    ck_assert(s != NULL);
+
     teenycss_rule **rules = ruleset->rules;
     ck_assert(rules[0]->filters_count == 1);
     ck_assert(rules[0]->filters[0]->attribute_selectors_count == 1);
