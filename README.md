@@ -16,7 +16,7 @@ This library is preferrable over a web engine for these reasons:
   work and less attack surface than a full web engine.
 
 - No HTML/web assumptions that tags like `b`, `div`, ... exist,
-  or you even use a particular type of document object model.
+  or that you even use a particular type of document object model.
   It is ideal for use of styling of not-strictly-web elements.
 
 - It can be included as a single header file. This avoids
