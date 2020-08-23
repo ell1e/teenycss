@@ -1,4 +1,6 @@
 
+**WARNING, SUPER UNFINISHED, DO NOT USE YET**
+
 # teenycss - a header-only CSS library
 
 teenycss is a library to parse a subset of Cascading Style Sheets,
